@@ -210,13 +210,7 @@ export class TrainingOrchestratorService {
       const normalizedBacktestWindows = job.backtestWindows.map((windowDataset) => this.normalizeWindow(windowDataset));
       const hasSufficientTrainingCoverage = normalizedTrainingWindows.every((windowDataset) => this.hasSufficientCoverage(windowDataset.snapshots));
       const hasSufficientBacktestCoverage = normalizedBacktestWindows.every((windowDataset) => this.hasSufficientCoverage(windowDataset.snapshots));
-      const trainingSnapshotCount = normalizedTrainingWindows.reduce((sum, windowDataset) => sum + windowDataset.snapshots.length, 0);
       if (hasSufficientTrainingCoverage && hasSufficientBacktestCoverage) {
-        const jobStartedAtTs = Date.now();
-        console.log(
-          `[training] start model=${job.modelId} version=${job.modelVersion} trainingWindows=${normalizedTrainingWindows.length} backtestWindows=${normalizedBacktestWindows.length} snapshots=${trainingSnapshotCount}`
-        );
-        const trainerStartedAtTs = Date.now();
         const trainingResult = await this.trainerService.train({
           modelId: job.modelId,
           modelVersion: job.modelVersion,
@@ -225,33 +219,22 @@ export class TrainingOrchestratorService {
           windows: normalizedTrainingWindows,
           previousMetadata: null
         });
-        const trainerDurationMs = Date.now() - trainerStartedAtTs;
-        const backtestStartedAtTs = Date.now();
         const backtestResult = await this.backtestEvaluatorService.evaluate({
           asset: job.asset,
           window: job.window,
           windows: normalizedBacktestWindows,
           artifactPath: trainingResult.metadata.artifactPath
         });
-        const backtestDurationMs = Date.now() - backtestStartedAtTs;
-        const scoreStartedAtTs = Date.now();
         const score = this.scoreCalculatorService.calculateScore({
           backtestStats: backtestResult.stats,
           trainedAtTs: trainingResult.metadata.lastTrainingTs,
           stabilityFactor: backtestResult.stabilityFactor,
           overfitPenalty: 0
         });
-        const scoreDurationMs = Date.now() - scoreStartedAtTs;
         const metadata = { ...trainingResult.metadata, latestBacktest: backtestResult.stats, score };
         const metadataPath = this.metadataRepository.buildMetadataPath(metadata.artifactPath);
-        const persistStartedAtTs = Date.now();
         this.metadataRepository.writeMetadata(metadataPath, metadata);
         this.persistTrainingOutputs(metadataPath, job);
-        const persistDurationMs = Date.now() - persistStartedAtTs;
-        const totalDurationMs = Date.now() - jobStartedAtTs;
-        console.log(
-          `[training] finish model=${job.modelId} version=${job.modelVersion} trainingWindows=${normalizedTrainingWindows.length} backtestWindows=${normalizedBacktestWindows.length} trainerMs=${trainerDurationMs} backtestMs=${backtestDurationMs} scoreMs=${scoreDurationMs} persistMs=${persistDurationMs} totalMs=${totalDurationMs}`
-        );
         this.logBacktestSummary(job, score, metadata.latestBacktest);
       }
     }

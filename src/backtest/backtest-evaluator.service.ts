@@ -313,25 +313,19 @@ export class BacktestEvaluatorService {
    */
 
   public async evaluate(options: BacktestEvaluationOptions): Promise<BacktestEvaluationResult> {
-    const evaluationStartedAtTs = Date.now();
     const evaluationWindows = this.resolveEvaluationWindows(options);
-    const snapshotCount = evaluationWindows.reduce((sum, windowDataset) => sum + windowDataset.snapshots.length, 0);
     const latestWindow = evaluationWindows[evaluationWindows.length - 1];
     if (!latestWindow) {
       throw new Error(`Backtest evaluation requires a latest window for ${options.asset}/${options.window}`);
     }
-    console.log(`[backtest] start asset=${options.asset} window=${options.window} windows=${evaluationWindows.length} snapshots=${snapshotCount}`);
-    this.assertMinimumSnapshots(snapshotCount);
+    this.assertMinimumSnapshots(evaluationWindows.reduce((sum, windowDataset) => sum + windowDataset.snapshots.length, 0));
     const modelConfig = this.modelConfigResolverService.resolveByWindow(options.window);
     const artifactState = this.artifactRepository.readArtifactState(options.artifactPath);
-    const featureBuildStartedAtTs = Date.now();
     const evaluationDataset = this.tensorflowSequenceDatasetService.buildEvaluationDatasetForWindows({
       windows: evaluationWindows,
       modelConfig,
       artifactState
     });
-    const featureBuildDurationMs = Date.now() - featureBuildStartedAtTs;
-    const targetBuildStartedAtTs = Date.now();
     let probabilities: number[] = [];
     if (this.hasTensorflowArtifact(options.artifactPath)) {
       const model = await this.tensorflowRuntimeService.loadModel(options.artifactPath);
@@ -340,13 +334,8 @@ export class BacktestEvaluatorService {
     } else {
       probabilities = this.calculateSyntheticProbabilities(evaluationDataset.inputs);
     }
-    const targetBuildDurationMs = Date.now() - targetBuildStartedAtTs;
     const stats = this.buildBacktestStats(evaluationDataset, probabilities, options.artifactPath, latestWindow.market);
     const stabilityFactor = Math.min(1, Math.max(0, 1 - Math.abs(0.5 - (stats.accuracy ?? 0))));
-    const totalDurationMs = Date.now() - evaluationStartedAtTs;
-    console.log(
-      `[backtest] finish asset=${options.asset} window=${options.window} featureBuildMs=${featureBuildDurationMs} targetBuildMs=${targetBuildDurationMs} validRows=${evaluationDataset.inputs.length} totalMs=${totalDurationMs}`
-    );
     const backtestEvaluationResult: BacktestEvaluationResult = { stats, stabilityFactor };
     return backtestEvaluationResult;
   }

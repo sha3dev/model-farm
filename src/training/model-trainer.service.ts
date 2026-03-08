@@ -218,14 +218,9 @@ export class ModelTrainerService {
    */
 
   public async train(options: TrainModelOptions): Promise<TrainModelResult> {
-    const trainStartedAtTs = Date.now();
     const trainingWindows = this.resolveTrainingWindows(options);
-    const snapshotCount = trainingWindows.reduce((sum, windowDataset) => sum + windowDataset.snapshots.length, 0);
-    console.log(`[trainer] start model=${options.modelId} version=${options.modelVersion} windows=${trainingWindows.length} snapshots=${snapshotCount}`);
     const modelConfig = this.modelConfigResolverService.resolveByWindow(options.window);
-    const featureBuildStartedAtTs = Date.now();
     const preparedTrainingDataset = this.tensorflowSequenceDatasetService.buildTrainingDatasetForWindows({ windows: trainingWindows, modelConfig });
-    const featureBuildDurationMs = Date.now() - featureBuildStartedAtTs;
     const artifactPath = this.artifactRepository.buildArtifactPath(options.asset, options.window, options.modelId, options.modelVersion);
     const model = await this.tensorflowRuntimeService.createModel({ modelConfig, featureCount: preparedTrainingDataset.featureCount });
     const trainSummary = await this.tensorflowRuntimeService.trainModel({
@@ -250,22 +245,14 @@ export class ModelTrainerService {
     );
     artifactState.preprocessing.featureMeans = [...preparedTrainingDataset.scalingState.featureMeans];
     artifactState.preprocessing.featureStds = [...preparedTrainingDataset.scalingState.featureStds];
-    const artifactSaveStartedAtTs = Date.now();
     this.artifactRepository.ensureArtifactPath(artifactPath);
     await this.tensorflowRuntimeService.saveModel(model, artifactPath);
     this.artifactRepository.saveArtifact({ artifactPath, state: artifactState });
     model.dispose();
-    const artifactSaveDurationMs = Date.now() - artifactSaveStartedAtTs;
     const minimumSnapshotCount = preparedTrainingDataset.minimumValidFeatureRowCount;
     const persistedModelMetadata = this.buildMetadata(options, artifactPath, minimumSnapshotCount);
     const metadataPath = this.metadataRepository.buildMetadataPath(artifactPath);
-    const metadataWriteStartedAtTs = Date.now();
     this.metadataRepository.writeMetadata(metadataPath, persistedModelMetadata);
-    const metadataWriteDurationMs = Date.now() - metadataWriteStartedAtTs;
-    const totalDurationMs = Date.now() - trainStartedAtTs;
-    console.log(
-      `[trainer] finish model=${options.modelId} version=${options.modelVersion} featureBuildMs=${featureBuildDurationMs} validRows=${preparedTrainingDataset.totalSequenceCount} artifactSaveMs=${artifactSaveDurationMs} metadataWriteMs=${metadataWriteDurationMs} totalMs=${totalDurationMs}`
-    );
     const trainModelResult: TrainModelResult = { metadata: persistedModelMetadata, artifactState };
     return trainModelResult;
   }

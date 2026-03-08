@@ -247,20 +247,12 @@ export class ModelFarmRuntimeService {
     backtestWindows: readonly RuntimeWindowDataset[]
   ): Promise<void> {
     const trainingJob = this.buildTrainingJob(combination, trainingWindows, backtestWindows);
-    const trainingSnapshotCount = trainingWindows.reduce((sum, windowDataset) => sum + windowDataset.snapshots.length, 0);
-    console.log(
-      `[runtime] training ${combination.asset}/${combination.window} trainingWindows=${trainingWindows.length} backtestWindows=${backtestWindows.length} snapshots=${trainingSnapshotCount}`
-    );
     await this.trainingOrchestratorService.runOnce([trainingJob]);
   }
 
   private async fetchMarketWindowDataset(combination: RuntimeCombination, market: MarketRecord): Promise<RuntimeWindowDataset | null> {
-    const fetchSnapshotsStartedAtTs = Date.now();
     const rawSnapshots = await this.gateway.getWindowSnapshotsBySlug(market.slug);
-    const fetchSnapshotsDurationMs = Date.now() - fetchSnapshotsStartedAtTs;
-    const normalizeStartedAtTs = Date.now();
     const normalizedSnapshots = this.coverageService.normalizeSnapshotsToWindow(rawSnapshots);
-    const normalizeDurationMs = Date.now() - normalizeStartedAtTs;
     let windowDataset: RuntimeWindowDataset | null = null;
     if (this.coverageService.isCoverageSufficient(market, normalizedSnapshots)) {
       windowDataset = this.buildWindowDataset(market, normalizedSnapshots);
@@ -275,11 +267,6 @@ export class ModelFarmRuntimeService {
         marketEndTs: market.marketEndTs,
         reason: "insufficient_market_window_coverage"
       });
-    }
-    if (windowDataset === null) {
-      console.log(
-        `[runtime] skipped ${market.slug} for ${combination.asset}/${combination.window} coverage=insufficient snapshots=${normalizedSnapshots.length} fetchSnapshotsMs=${fetchSnapshotsDurationMs} normalizeMs=${normalizeDurationMs}`
-      );
     }
     return windowDataset;
   }
@@ -347,17 +334,12 @@ export class ModelFarmRuntimeService {
 
   private async processCombinationOnce(combination: RuntimeCombination): Promise<RuntimeCombinationResult> {
     const startedAtTs = Date.now();
-    const listMarketsStartedAtTs = Date.now();
     const markets = await this.gateway.listMarkets(combination.window, combination.asset);
-    const listMarketsDurationMs = Date.now() - listMarketsStartedAtTs;
     const candidateMarkets = this.selectCandidateMarkets(combination, markets);
     let trainedJobCount = 0;
     let skippedMarketCount = 0;
     const marketResults: RuntimeMarketResult[] = [];
     const cache = new Map<string, RuntimeWindowDataset | null>();
-    console.log(
-      `[runtime] cycle start ${combination.asset}/${combination.window} candidates=${candidateMarkets.length} listMarketsMs=${listMarketsDurationMs}`
-    );
     const holdoutWindows = await this.collectHoldoutWindows(combination, candidateMarkets, cache, marketResults);
     const trainingWindows = await this.collectTrainingWindows(combination, candidateMarkets, holdoutWindows, cache, marketResults);
     skippedMarketCount = marketResults.filter((marketResult) => marketResult.status === "skipped").length;
@@ -374,13 +356,6 @@ export class ModelFarmRuntimeService {
         });
       }
       trainedJobCount = 1;
-      console.log(
-        `[runtime] trained ${combination.asset}/${combination.window} trainingWindows=${trainingWindows.length} backtestWindows=${holdoutWindows.length}`
-      );
-    } else {
-      console.log(
-        `[runtime] waiting ${combination.asset}/${combination.window} trainable=${trainingWindows.length}/${this.trainingBatchWindowCount} holdout=${holdoutWindows.length}/${this.backtestHoldoutWindowCount}`
-      );
     }
     const combinationResult: RuntimeCombinationResult = {
       asset: combination.asset,
@@ -390,9 +365,6 @@ export class ModelFarmRuntimeService {
       durationMs: Date.now() - startedAtTs,
       marketResults
     };
-    console.log(
-      `[runtime] cycle finish ${combination.asset}/${combination.window} durationMs=${combinationResult.durationMs} trained=${trainedJobCount} skipped=${skippedMarketCount}`
-    );
     return combinationResult;
   }
 
@@ -416,10 +388,7 @@ export class ModelFarmRuntimeService {
 
   private async runCombinationLoop(combination: RuntimeCombination): Promise<void> {
     while (this.isRunning) {
-      const combinationResult = await this.processCombinationWithSlot(combination);
-      if (combinationResult.trainedJobCount === 0 && combinationResult.skippedMarketCount === 0) {
-        console.log(`[runtime] idle ${combination.asset}/${combination.window}`);
-      }
+      await this.processCombinationWithSlot(combination);
       await this.waitLoopDelay();
     }
   }
