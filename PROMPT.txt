@@ -1,0 +1,6 @@
+OK, ahora que ya tenemos hecho esto. Quiero que ejecutes un primer proceso de entreno + backtesting TU SOLO. Quiero que añadas 
+logs, etc para asegurarte de que TODOS los datos llegan bien. Que no hay valores sin sentido, que el orden de las features es correcto. 
+Resumiendo. Quiero que analices y prepares un PLAN para asegurarnos de que el algoritmo que hemos diseñado funciona justo como queremos. 
+Quiero evitar cosas del tipo... valores que llegan vacios, o con valores sin sentido, etc. Puedes añadir todo el log que necesites, o hacer 
+lo que sea necesario. Quiero que seas autonomo. Quiero que entrenes el modelo, ejecutes backtesting, y me digas si todo lo que 
+hacemos tiene sentido o por el contrario, ves algo que no te encaja (por ejemplo, los datos que nos llegan, o los que calculamos, no son coherentes)

@@ -1,0 +1,60 @@
+{
+  "name": "@sha3/model-farm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "start": "node --import tsx src/main.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm run test",
+    "fix": "npm run lint:fix && npm run format:write",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format:check": "prettier --check .",
+    "format:write": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/run-tests.mjs",
+    "publish": "node scripts/release-publish.mjs",
+    "validate:collector": "node --import tsx src/main.ts --validate-collector"
+  },
+  "dependencies": {
+    "@sha3/click-collector": "^0.5.0",
+    "@tensorflow/tfjs-node": "^4.22.0",
+    "dotenv": "^16.6.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@sha3/code-standards": "^0.7.0",
+    "@types/node": "^22.13.10",
+    "eslint": "^9.20.1",
+    "prettier": "^3.5.3",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.56.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sha3dev/model-farm"
+  },
+  "homepage": "https://github.com/sha3dev/model-farm#readme",
+  "bugs": {
+    "url": "https://github.com/sha3dev/model-farm/issues"
+  },
+  "codeStandards": {
+    "template": "node-service",
+    "profilePath": null,
+    "withAiAdapters": true,
+    "lastRefreshWith": "0.7.0"
+  }
+}
